@@ -218,3 +218,6 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Evaluation videos (shared via Google Drive, not committed)
+eval/videos/
