@@ -3,6 +3,8 @@
 생활체육 풋살 경기에서 카메라 영상으로 골을 자동 감지해 점수판을 올리고, 선제골·동점골·역전골 같은 상황에 맞는 해설과 함성을 틀어 주는 MVP입니다.
 주최자는 폰으로 팀과 선수 별명을 등록하고, 경기 중에는 득점자 지정과 노골 정정만 탭으로 합니다.
 
+▶ 시연 영상: [시연 영상 링크]
+
 ## 폴더 구성
 
 - `backend/` (이) — FastAPI 서버. 골 신호를 받아 점수와 상황을 판정하고, 해설 음성을 골라 WebSocket으로 점수판과 폰에 보냅니다. 화면·감지와 주고받는 형식은 `backend/API.md`에 있습니다.
@@ -21,7 +23,7 @@ python -m venv .venv
 .venv/Scripts/python.exe -m pip install ultralytics
 ```
 
-ultralytics는 감지용입니다(PyTorch, OpenCV가 같이 설치됩니다). GPU가 없어도 CPU에서 동작합니다. 공 감지 모델 `detector/weights/ball_s.pt`는 저장소에 들어 있습니다. 평가에 쓴 원본 촬영 영상은 용량 때문에 저장소에 없고 `eval/videos/`에 따로 넣어 씁니다. 시연 영상: [시연 영상 링크]
+ultralytics는 감지용입니다(PyTorch, OpenCV가 같이 설치됩니다). GPU가 없어도 CPU에서 동작합니다. 공 감지 모델 `detector/weights/ball_s.pt`는 저장소에 들어 있습니다. 평가에 쓴 원본 촬영 영상은 용량 때문에 저장소에 없고 `eval/videos/`에 따로 넣어 씁니다.
 
 ## 실행 순서
 
