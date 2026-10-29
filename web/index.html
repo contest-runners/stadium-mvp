@@ -1,0 +1,515 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>점수판</title>
+<style>
+  :root {
+    --bg: #0f0f10; --panel: #1c1c1f; --line: #2c2c31; --fg: #f5f5f4; --muted: #8b8b92;
+    --hl: #ffa24c; --ok: #34d399; --bad: #f87171;
+    --a: #f97316; --b: #3b82f6;
+    --font: "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--font); overflow: hidden;
+         -webkit-font-smoothing: antialiased; word-break: keep-all; }
+  .board { height: 100vh; display: grid; grid-template-rows: auto 1fr auto auto; padding: 3.5vh 5vw 2.5vh; gap: 2vh; }
+
+  .top { display: flex; justify-content: center; align-items: baseline; gap: 14px; }
+  .top .phase { color: var(--muted); font-size: clamp(14px, 2vw, 26px); font-weight: 600; }
+  .top .time { font-size: clamp(22px, 3.4vw, 46px); font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: .02em; }
+
+  .score { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; }
+  .team { display: flex; flex-direction: column; align-items: center; gap: 1.2vh; min-width: 0; }
+  .bar { width: 26%; max-width: 220px; height: 8px; border-radius: 99px; background: var(--c); }
+  .name { font-size: clamp(20px, 3.4vw, 48px); font-weight: 800; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .num { font-size: clamp(120px, 28vh, 360px); line-height: .95; font-weight: 900; font-variant-numeric: tabular-nums;
+         letter-spacing: -.03em; transition: color .3s; }
+  .num.pop { animation: pop .9s cubic-bezier(.2, 1.6, .4, 1); color: var(--c); }
+  @keyframes pop { 0% { transform: scale(.6); } 60% { transform: scale(1.18); } 100% { transform: scale(1); } }
+  .colon { display: flex; flex-direction: column; gap: 4vh; padding: 0 3vw; }
+  .colon i { width: clamp(10px, 1.4vw, 20px); aspect-ratio: 1; border-radius: 50%; background: #5a5a60; }
+
+  .caption { background: var(--panel); border-radius: 16px; padding: 2.2vh 2.4vw; display: flex; gap: 1.6vw; align-items: center; min-height: 13vh; }
+  .caption svg { flex: none; width: clamp(22px, 2.6vw, 38px); height: auto; color: var(--muted); }
+  .caption.live svg { color: var(--hl); animation: pulse 1s ease-in-out 3; }
+  @keyframes pulse { 50% { opacity: .35; } }
+  .caption .main { font-size: clamp(20px, 3vw, 44px); font-weight: 800; color: var(--hl); line-height: 1.3; }
+  .caption .sub { font-size: clamp(13px, 1.4vw, 20px); color: var(--muted); margin-top: .4vh; }
+  .caption.idle .main { color: var(--muted); font-weight: 600; }
+
+  .foot { display: flex; justify-content: space-between; color: var(--muted); font-size: clamp(11px, 1.1vw, 15px); }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); margin-right: 6px; vertical-align: middle; }
+  .dot.on { background: var(--ok); } .dot.off { background: var(--bad); } .dot.mock { background: var(--hl); }
+
+  /* 골 연출 */
+  .flash { position: fixed; inset: 0; pointer-events: none; display: none; flex-direction: column; align-items: center; justify-content: center;
+           background: var(--c); color: #fff; z-index: 10; text-align: center; padding: 4vw; }
+  .flash.show { display: flex; animation: flashIn 2s ease forwards; }
+  @keyframes flashIn { 0% { opacity: 0; transform: scale(1.06); } 8% { opacity: 1; transform: scale(1); }
+                       80% { opacity: 1; } 100% { opacity: 0; } }
+  .flash b { font-size: clamp(80px, 22vh, 260px); font-weight: 900; letter-spacing: -.02em; line-height: 1; }
+  .flash span { font-size: clamp(24px, 4.4vw, 64px); font-weight: 800; margin-top: 2vh; }
+  .flash.cancel { --c: #3f3f46; }
+
+  /* 소리 켜기 */
+  .gate { position: fixed; inset: 0; background: rgba(10, 10, 11, .94); z-index: 20; display: flex; flex-direction: column;
+          align-items: center; justify-content: center; gap: 18px; text-align: center; padding: 24px; }
+  .gate button { font: 800 clamp(22px, 3vw, 36px) var(--font); padding: 22px 48px; border-radius: 18px; border: 0;
+                 background: var(--hl); color: #111; cursor: pointer; }
+  .gate p { color: var(--muted); margin: 0; font-size: clamp(14px, 1.4vw, 18px); }
+  .gate.hide { display: none; }
+
+  /* 테스트 버튼 (가짜 모드 / ?dev=1) */
+  .dev { position: fixed; left: 12px; top: 12px; display: none; flex-wrap: wrap; gap: 6px; max-width: 60vw; z-index: 5; opacity: .35; transition: opacity .2s; }
+  .dev:hover { opacity: 1; }
+  .dev.show { display: flex; }
+  .dev button { font: 600 12px var(--font); background: #26262b; color: var(--fg); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; cursor: pointer; }
+  .toast { position: fixed; top: 16px; left: 50%; transform: translateX(-50%); background: #7f1d1d; color: #fff; padding: 10px 16px; border-radius: 10px; display: none; z-index: 30; font-size: 14px; }
+</style>
+</head>
+<body>
+<div class="board">
+  <div class="top"><span class="phase" id="phase">경기 전</span><span class="time" id="time"></span></div>
+
+  <div class="score">
+    <div class="team" id="teamA" style="--c: var(--a)"><div class="bar"></div><div class="name" id="nameA">A팀</div><div class="num" id="numA">0</div></div>
+    <div class="colon"><i></i><i></i></div>
+    <div class="team" id="teamB" style="--c: var(--b)"><div class="bar"></div><div class="name" id="nameB">B팀</div><div class="num" id="numB">0</div></div>
+  </div>
+
+  <div class="caption idle" id="caption">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M19 5a10 10 0 0 1 0 14"/></svg>
+    <div><div class="main" id="capMain">킥오프를 기다리는 중</div><div class="sub" id="capSub">주최자 폰에서 경기를 시작하세요</div></div>
+  </div>
+
+  <div class="foot">
+    <span><span class="dot" id="connDot"></span><span id="connText">연결 중</span></span>
+    <span>노골 정정은 주최자 폰에서</span>
+  </div>
+</div>
+
+<div class="flash" id="flash"><b id="flashMain">GOAL!</b><span id="flashSub"></span></div>
+
+<div class="gate" id="gate">
+  <button id="soundBtn">소리 켜기</button>
+  <p>브라우저는 한 번 누르기 전에는 소리를 내지 않습니다. 킥오프 전에 눌러 주세요.</p>
+  <p>F 키: 전체 화면</p>
+</div>
+
+<div class="dev" id="dev">
+  <button data-dev="kickoff">킥오프</button>
+  <button data-dev="goalA">A 골</button>
+  <button data-dev="goalB">B 골</button>
+  <button data-dev="left">왼쪽 골대 신호</button>
+  <button data-dev="scorer">득점자 랜덤</button>
+  <button data-dev="cancel">노골(최근)</button>
+  <button data-dev="half">하프타임</button>
+  <button data-dev="second">후반</button>
+  <button data-dev="end">종료</button>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ================== 공통 블록 시작 (index.html · host.html 에 똑같이 들어 있음) ==================
+   서버 주소나 메시지 형식이 바뀌면 이 블록만 고치면 됩니다. 두 파일 모두 고쳐 주세요.
+
+   주소 옵션
+     ?mock=1                 백엔드 없이 가짜 모드 (같은 브라우저의 점수판·주최자 화면끼리 연동)
+     ?server=http://IP:8000  다른 주소의 백엔드에 붙기 (기본: 이 페이지를 띄운 서버)
+     ?dev=1                  점수판에 테스트 버튼 표시 (가짜 모드에선 항상 표시)
+*/
+const Q = new URLSearchParams(location.search);
+const SERVER = (Q.get("server") || (location.protocol.startsWith("http") ? location.origin : "")).replace(/\/$/, "");
+const MOCK = Q.has("mock") || !SERVER;
+const AUDIO_BASE = SERVER + "/audio/";
+const CHEER_FILE = "cheer.mp3";     // 함성 효과음 파일 이름 (이와 맞출 것)
+const NOGOAL_FILE = "노골.mp3";     // 노골 음성 파일 이름 (이와 맞출 것)
+const TEAM_IDS = ["A", "B"];
+const DEFAULT_COLORS = ["#f97316", "#3b82f6"];
+
+const TEAM_LINES = {
+  "선제골": t => `${t} 선제골입니다!!`,
+  "동점골": t => `${t} 동점골! 경기를 원점으로 돌립니다!`,
+  "역전골": t => `${t} 역전골! 드디어 경기를 뒤집습니다!!`,
+  "앞서가는 골": t => `${t} 골! 다시 앞서 나갑니다!`,
+  "추격골": t => `${t} 추격골! 한 골 따라붙습니다!`,
+  "달아나는 골": t => `${t} 골! 점수 차를 벌립니다!`,
+};
+const NICK_LINES = {
+  "선제골": n => `${n}!!! 선제골입니다!!!`,
+  "동점골": n => `${n}!!! 동점골을 터뜨립니다!!!`,
+  "역전골": n => `${n}!!! 역전골입니다!!!`,
+  "앞서가는 골": n => `${n}!!! 다시 앞서가는 골!!!`,
+  "추격골": n => `${n}!!! 추격의 불씨를 살립니다!!!`,
+  "달아나는 골": n => `${n}!!! 쐐기를 박습니다!!!`,
+  "해트트릭": n => `${n}!!! 해트트릭입니다!!!`,
+};
+const SIT_ALIAS = { "선제": "선제골", "동점": "동점골", "역전": "역전골", "추격": "추격골", "리드": "앞서가는 골",
+  "앞서감": "앞서가는 골", "앞서가는골": "앞서가는 골", "달아나기": "달아나는 골", "달아나는골": "달아나는 골", "추가골": "달아나는 골" };
+const PHASE_LABEL = { setup: "경기 전", first_half: "전반", halftime: "하프타임", second_half: "후반", ended: "경기 종료" };
+
+function teamLine(name, sit) { return (TEAM_LINES[sit] || (t => `${t} 골입니다!!`))(name); }
+function nickLine(nick, sit) { return (NICK_LINES[sit] || (n => `${n}!!! 골입니다!!!`))(nick); }
+function esc(s) { return String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+function mmss(sec) { sec = Math.max(0, Math.floor(sec || 0)); return String(Math.floor(sec / 60)).padStart(2, "0") + ":" + String(sec % 60).padStart(2, "0"); }
+
+// ---------- 서버 메시지 → 화면이 쓰는 모양 (형식이 달라지면 여기만 고침) ----------
+function normSit(s) { if (!s) return s; if (TEAM_LINES[s] || s === "해트트릭") return s; return SIT_ALIAS[s] || (TEAM_LINES[s + "골"] ? s + "골" : s); }
+function normTeamId(t) { if (t === 0 || t === "0") return "A"; if (t === 1 || t === "1") return "B"; return String(t ?? "").toUpperCase(); }
+function teamIndex(t) { return TEAM_IDS.indexOf(normTeamId(t)); }
+function normScore(s) {
+  if (Array.isArray(s)) return [Number(s[0]) || 0, Number(s[1]) || 0];
+  if (s && typeof s === "object") return [Number(s.A ?? s.a ?? 0), Number(s.B ?? s.b ?? 0)];
+  return undefined;
+}
+function normTeams(t) {
+  const arr = Array.isArray(t) ? t : TEAM_IDS.map(k => t && t[k]);
+  return [0, 1].map(i => {
+    const x = arr[i] || {};
+    return {
+      id: TEAM_IDS[i],
+      name: x.name || `${TEAM_IDS[i]}팀`,
+      color: x.color || DEFAULT_COLORS[i],
+      players: (x.players || []).map(p => typeof p === "string" ? p : (p.nick || p.name || "")).filter(Boolean),
+    };
+  });
+}
+function normGoal(g) {
+  return { goal_id: g.goal_id ?? g.id, team: normTeamId(g.team), half: g.half ?? 1, time: g.time ?? g.clock ?? "",
+    situation: normSit(g.situation), nick: g.nick ?? g.scorer ?? null, cancelled: !!g.cancelled };
+}
+const TYPE_ALIAS = { goal_canceled: "goal_cancelled", cancel: "goal_cancelled", scorer: "scorer_set",
+  fulltime: "match_end", end: "match_end", halftime: "state" };
+function normalize(m) {
+  const o = { ...m, type: TYPE_ALIAS[m.type] || m.type };
+  if (m.score !== undefined) o.score = normScore(m.score);
+  if (m.teams) o.teams = normTeams(m.teams);
+  if (m.goals) o.goals = m.goals.map(normGoal);
+  if (m.situation) o.situation = normSit(m.situation);
+  if (m.team !== undefined) o.team = normTeamId(m.team);
+  o.goal_id = m.goal_id ?? m.id;
+  const a = m.audio || m.voice;
+  o.audio = a ? (a.endsWith(".mp3") ? a : a + ".mp3") : null;
+  if (m.cancel_until) o.cancel_until_ms = m.cancel_until > 1e12 ? m.cancel_until : m.cancel_until * 1000;
+  return o;
+}
+
+// ---------- 서버 연결 (진짜 서버 / 가짜 모드 공통 입구) ----------
+const Net = {
+  handlers: [], onConn: () => {},
+  on(fn) { this.handlers.push(fn); },
+  deliver(m) { const n = normalize(m); for (const h of this.handlers) { try { h(n); } catch (e) { console.error(e); } } },
+  start() { if (MOCK) { Mock.start(); this.onConn("mock"); } else this.connect(); },
+  connect() {
+    const ws = new WebSocket(SERVER.replace(/^http/, "ws") + "/ws");
+    ws.onopen = async () => {
+      this.onConn("on");
+      try { const r = await fetch(SERVER + "/api/match"); if (r.ok) this.deliver({ type: "state", ...(await r.json()) }); } catch {}
+    };
+    ws.onmessage = e => { try { this.deliver(JSON.parse(e.data)); } catch { console.error("메시지 해석 실패", e.data); } };
+    ws.onclose = () => { this.onConn("off"); setTimeout(() => this.connect(), 1500); };
+  },
+  async post(path, body = {}) {
+    if (MOCK) return Mock.request(path, body);
+    const r = await fetch(SERVER + path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    if (!r.ok) throw new Error(`${path} 요청 실패 (${r.status})`);
+    return r.json().catch(() => ({}));
+  },
+};
+
+// 진행 시간 표시용 (서버가 clock: {running, elapsed} 를 주면 사용, 없으면 시간은 표시 안 함)
+const Clock = {
+  phase: "setup", running: false, base: 0, at: 0, known: false,
+  apply(st) {
+    if (st.phase) this.phase = st.phase;
+    const c = st.clock || (st.elapsed !== undefined ? { running: st.running, elapsed: st.elapsed } : null);
+    if (c) { this.known = true; this.running = !!c.running; this.base = Number(c.elapsed) || 0; this.at = Date.now(); }
+  },
+  seconds() { return this.base + (this.running ? (Date.now() - this.at) / 1000 : 0); },
+  label() { return PHASE_LABEL[this.phase] || ""; },
+  text() { return this.known && this.phase !== "setup" ? mmss(this.seconds()) : ""; },
+};
+
+// ---------- 가짜 백엔드 (백엔드 계획의 API를 브라우저 안에서 흉내 냄) ----------
+// 같은 브라우저에서 점수판과 주최자 화면을 ?mock=1 로 열면 BroadcastChannel 로 연동됩니다. 점수판을 먼저 여세요.
+const Mock = {
+  ch: null, leader: false, synced: false, st: null, seq: 0,
+  fresh(prev) {
+    return { phase: "setup", half: 1, half_minutes: 15, swapped: false, score: [0, 0], goals: [],
+      teams: prev ? prev.teams : normTeams([{ name: "오렌지팀", players: ["번개", "캡틴", "철벽", "막내"] },
+                                            { name: "블루팀", players: ["탱크", "에이스", "골잡이", "수호신"] }]),
+      clock: { running: false, base: 0, since: 0 } };
+  },
+  start() {
+    this.st = this.fresh();
+    try { this.ch = new BroadcastChannel("stadium-mock"); } catch { this.ch = null; }
+    if (!this.ch) { this.leader = true; this.emit(this.stateMsg()); return; }
+    this.ch.onmessage = e => this.onChannel(e.data);
+    this.ch.postMessage({ k: "hello" });
+    setTimeout(() => { if (!this.synced) { this.leader = true; this.emit(this.stateMsg()); } }, 400);
+  },
+  onChannel(d) {
+    if (d.k === "hello" && this.leader) this.ch.postMessage({ k: "event", m: this.stateMsg() });
+    else if (d.k === "event" && !this.leader) { this.synced = true; Net.deliver(d.m); }
+    else if (d.k === "action" && this.leader) { try { this.handle(d.path, d.body); } catch (e) { console.warn(e.message); } }
+  },
+  emit(m) { Net.deliver(m); if (this.ch && this.leader) this.ch.postMessage({ k: "event", m }); },
+  request(path, body) {
+    if (this.leader) return this.handle(path, body);
+    this.ch.postMessage({ k: "action", path, body }); return {};
+  },
+  elapsed() { const c = this.st.clock; return c.base + (c.running ? (Date.now() - c.since) / 1000 : 0); },
+  stopClock() { this.st.clock = { running: false, base: this.elapsed(), since: 0 }; },
+  stateMsg() {
+    const s = this.st;
+    return { type: "state", phase: s.phase, half: s.half, half_minutes: s.half_minutes, swapped: s.swapped,
+      score: [...s.score], teams: s.teams, goals: s.goals, clock: { running: s.clock.running, elapsed: Math.floor(this.elapsed()) } };
+  },
+  situation(team) { // 직전에 앞서 있던 팀을 기준으로 역전/앞서가는 골을 구분
+    const i = TEAM_IDS.indexOf(team), sc = [0, 0]; let lastLeader = null;
+    for (const g of this.st.goals) {
+      if (g.cancelled) continue;
+      sc[TEAM_IDS.indexOf(g.team)]++;
+      if (sc[0] !== sc[1]) lastLeader = sc[0] > sc[1] ? 0 : 1;
+    }
+    const mine = sc[i], theirs = sc[1 - i], after = mine + 1;
+    if (mine === 0 && theirs === 0) return "선제골";
+    if (after === theirs) return "동점골";
+    if (after < theirs) return "추격골";
+    if (mine > theirs) return "달아나는 골";
+    return lastLeader === 1 - i ? "역전골" : "앞서가는 골";
+  },
+  addGoal(team) {
+    const s = this.st;
+    if (s.phase !== "first_half" && s.phase !== "second_half") throw new Error("경기 중이 아닙니다");
+    const sit = this.situation(team), id = ++this.seq, ti = TEAM_IDS.indexOf(team);
+    const g = { goal_id: id, team, half: s.half, time: mmss(this.elapsed()), situation: sit, nick: null, cancelled: false,
+      cancel_until: Date.now() + 10000 };
+    s.goals.push(g); s.score[ti]++;
+    this.emit({ type: "goal", goal_id: id, team, score: [...s.score], situation: sit, audio: `${team}_${sit}.mp3`,
+      text: teamLine(s.teams[ti].name, sit), half: s.half, time: g.time, cancel_until: g.cancel_until });
+    return { goal_id: id };
+  },
+  handle(path, body = {}) {
+    const s = this.st; let m;
+    if (path === "/api/match") {
+      this.st = this.fresh(); this.seq = 0;
+      if (body.teams) this.st.teams = normTeams(body.teams);
+      this.st.half_minutes = body.half_minutes || 15;
+      this.emit(this.stateMsg());
+    } else if (path === "/api/match/kickoff") {
+      Object.assign(s, { phase: "first_half", half: 1 }); s.clock = { running: true, base: 0, since: Date.now() };
+      this.emit(this.stateMsg());
+    } else if (path === "/api/match/halftime") {
+      if (s.phase !== "halftime") this.stopClock();
+      s.phase = "halftime"; s.swapped = body.swap !== false;
+      this.emit(this.stateMsg());
+    } else if (path === "/api/match/second-half") {
+      Object.assign(s, { phase: "second_half", half: 2 }); s.clock = { running: true, base: 0, since: Date.now() };
+      this.emit(this.stateMsg());
+    } else if (path === "/api/match/end") {
+      this.stopClock(); s.phase = "ended";
+      this.emit({ type: "match_end", score: [...s.score], goals: s.goals, teams: s.teams, audio: "경기종료.mp3",
+        text: `최종 스코어 ${s.score[0]} 대 ${s.score[1]}, 경기 종료입니다!` });
+      this.emit(this.stateMsg());
+    } else if (path === "/api/goals/manual") {
+      return this.addGoal(normTeamId(body.team));
+    } else if (path === "/api/events/goal") {
+      const leftIsA = !s.swapped;               // 전반: 왼쪽 골대 = A팀 골대 (진영 교대하면 반대)
+      const defending = (body.goal_side === "left") === leftIsA ? "A" : "B";
+      return this.addGoal(defending === "A" ? "B" : "A");
+    } else if ((m = path.match(/^\/api\/goals\/(\d+)\/cancel$/))) {
+      const g = s.goals.find(x => x.goal_id == m[1]);
+      if (!g || g.cancelled) return {};
+      if (Date.now() > g.cancel_until + 500) throw new Error("10초가 지나 노골 정정을 할 수 없습니다");
+      g.cancelled = true; s.score[TEAM_IDS.indexOf(g.team)]--;
+      this.emit({ type: "goal_cancelled", goal_id: g.goal_id, team: g.team, score: [...s.score],
+        audio: NOGOAL_FILE, text: "판독 결과, 노골입니다!" });
+    } else if ((m = path.match(/^\/api\/goals\/(\d+)\/scorer$/))) {
+      const g = s.goals.find(x => x.goal_id == m[1]);
+      if (!g || g.cancelled) return {};
+      const team = s.teams[TEAM_IDS.indexOf(g.team)];
+      const nick = body.nick || team.players[body.player_index] || "";
+      g.nick = nick;
+      const n = s.goals.filter(x => !x.cancelled && x.team === g.team && x.nick === nick).length;
+      const sit = n === 3 ? "해트트릭" : g.situation;
+      this.emit({ type: "scorer_set", goal_id: g.goal_id, team: g.team, nick, player_goals: n, situation: sit,
+        goal_situation: g.situation, audio: `${nick}_${sit}.mp3`, text: nickLine(nick, sit) });
+    }
+    return {};
+  },
+};
+/* ================== 공통 블록 끝 ================== */
+
+// ================== 점수판 ==================
+const $ = id => document.getElementById(id);
+const S = { teams: normTeams(null), score: [0, 0], lastGoal: null, lastTeam: null };
+
+// ---------- 소리: 해설은 순서대로, 함성은 겹쳐서 ----------
+const Sound = {
+  ctx: null, q: [], busy: false,
+  unlock() {
+    try {
+      this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const src = this.ctx.createBufferSource(); src.buffer = this.ctx.createBuffer(1, 1, 22050);
+      src.connect(this.ctx.destination); src.start(0);
+    } catch {}
+    try { new Audio("data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=").play().catch(() => {}); } catch {}
+    try { speechSynthesis.speak(new SpeechSynthesisUtterance(" ")); } catch {}
+  },
+  say(file, text) { this.q.push({ file, text }); this.next(); },
+  next() {
+    if (this.busy || !this.q.length) return;
+    this.busy = true;
+    const it = this.q.shift();
+    let done = false, fellBack = false;
+    const finish = () => { if (done) return; done = true; this.busy = false; this.next(); };
+    const fallback = () => { if (fellBack || done) return; fellBack = true; this.speak(it.text, finish); };
+    setTimeout(finish, 9000); // 어떤 경우에도 큐가 멈추지 않게
+    if (!it.file) return fallback();
+    const a = new Audio(AUDIO_BASE + encodeURIComponent(it.file));
+    a.onended = finish; a.onerror = fallback;
+    a.play().catch(fallback);
+  },
+  speak(text, cb) { // mp3가 없을 때 브라우저 음성으로 대신 읽기
+    if (!text || !window.speechSynthesis) return cb();
+    const u = new SpeechSynthesisUtterance(text.replace(/!+/g, "!"));
+    u.lang = "ko-KR"; u.rate = 1.12; u.pitch = 1.15;
+    const v = speechSynthesis.getVoices().find(v => v.lang && v.lang.startsWith("ko"));
+    if (v) u.voice = v;
+    u.onend = cb; u.onerror = cb;
+    speechSynthesis.speak(u);
+  },
+  cheer() {
+    const a = new Audio(AUDIO_BASE + encodeURIComponent(CHEER_FILE));
+    a.volume = .55;
+    a.onerror = () => this.crowd();
+    a.play().catch(() => this.crowd());
+  },
+  crowd() { // 함성 파일이 없을 때: 걸러낸 잡음으로 임시 함성
+    const ctx = this.ctx; if (!ctx) return;
+    const len = ctx.sampleRate * 2.4, buf = ctx.createBuffer(1, len, ctx.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (0.6 + 0.4 * Math.sin(i / 900));
+    const src = ctx.createBufferSource(); src.buffer = buf;
+    const bp = ctx.createBiquadFilter(); bp.type = "bandpass"; bp.frequency.value = 900; bp.Q.value = .6;
+    const g = ctx.createGain(), t = ctx.currentTime;
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(.28, t + .25); g.gain.exponentialRampToValueAtTime(.01, t + 2.3);
+    src.connect(bp).connect(g).connect(ctx.destination); src.start();
+  },
+};
+
+// ---------- 화면 그리기 ----------
+function renderTeams() {
+  S.teams.forEach((t, i) => {
+    const k = TEAM_IDS[i];
+    $("name" + k).textContent = t.name;
+    $("team" + k).style.setProperty("--c", t.color);
+  });
+}
+function renderScore(popTeam) {
+  TEAM_IDS.forEach((k, i) => {
+    const el = $("num" + k);
+    el.textContent = S.score[i];
+    if (k === popTeam) { el.classList.remove("pop"); void el.offsetWidth; el.classList.add("pop"); }
+  });
+}
+function renderClock() { $("phase").textContent = Clock.label(); $("time").textContent = Clock.text(); }
+setInterval(renderClock, 500);
+
+function caption(main, sub, live = true) {
+  $("capMain").textContent = main; $("capSub").textContent = sub || "";
+  const c = $("caption"); c.classList.toggle("idle", !live);
+  c.classList.remove("live"); void c.offsetWidth; if (live) c.classList.add("live");
+}
+function flash(main, sub, color, cancel = false) {
+  const f = $("flash");
+  f.classList.remove("show", "cancel"); void f.offsetWidth;
+  f.style.setProperty("--c", color || "#333");
+  if (cancel) f.classList.add("cancel");
+  $("flashMain").textContent = main; $("flashSub").textContent = sub || "";
+  f.classList.add("show");
+}
+function where() { const t = Clock.text(); return [Clock.label(), t].filter(Boolean).join(" "); }
+function teamOf(id) { return S.teams[teamIndex(id)] || { name: id, color: "#888" }; }
+
+// ---------- 메시지 처리 ----------
+Net.on(m => {
+  if (m.teams) { S.teams = m.teams; renderTeams(); }
+  if (m.score) S.score = m.score;
+
+  if (m.type === "state") {
+    Clock.apply(m); renderClock(); renderScore();
+    const changed = m.phase !== S.phase; S.phase = m.phase;
+    if (m.phase === "halftime") caption("전반전 종료", `${S.score[0]} : ${S.score[1]}`, false);
+    else if (m.phase === "setup") caption("킥오프를 기다리는 중", "주최자 폰에서 경기를 시작하세요", false);
+    else if (m.phase === "ended") { if (changed) caption("경기 종료", `${S.teams[0].name} ${S.score[0]} : ${S.score[1]} ${S.teams[1].name}`, false); }
+    else if (m.phase === "first_half" || m.phase === "second_half") {
+      if (changed || !S.lastGoal) caption(m.phase === "first_half" ? "경기 시작!" : "후반전 시작!", where(), false);
+    }
+  } else if (m.type === "period") { // 킥오프·하프타임·후반 시작 안내 (문구는 state가 그림)
+    const fb = { first_half: "경기 시작합니다!", halftime: "전반전 종료!", second_half: "후반전 시작합니다!" }[m.status] || "";
+    Sound.say(m.audio, m.text || fb);
+  } else if (m.type === "goal") {
+    const t = teamOf(m.team), text = m.text || teamLine(t.name, m.situation);
+    S.lastGoal = m.goal_id; S.lastTeam = m.team;
+    renderScore(m.team);
+    flash("GOAL!", `${t.name} · ${m.situation || "골"}`, t.color);
+    caption(text, `${t.name} ${m.situation || ""} · ${where()}`);
+    Sound.cheer(); Sound.say(m.audio, text);
+  } else if (m.type === "goal_cancelled") {
+    renderScore();
+    flash("노골", "판독 결과 취소", null, true);
+    caption(m.text || "판독 결과, 노골입니다!", `${S.score[0]} : ${S.score[1]}`);
+    Sound.say(m.audio || NOGOAL_FILE, m.text || "판독 결과, 노골입니다!");
+  } else if (m.type === "scorer_set") {
+    const t = teamOf(m.team), text = m.text || nickLine(m.nick, m.situation);
+    caption(`"${text}"`, `${t.name} ${m.goal_situation || m.situation || ""}${m.player_goals > 1 ? ` · ${m.nick} ${m.player_goals}골` : ""} · ${where()}`);
+    Sound.say(m.audio, text);
+  } else if (m.type === "match_end") {
+    Clock.phase = "ended"; S.phase = "ended"; renderClock(); renderScore();
+    const text = m.text || `최종 스코어 ${S.score[0]} 대 ${S.score[1]}, 경기 종료입니다!`;
+    caption(text, `${S.teams[0].name} ${S.score[0]} : ${S.score[1]} ${S.teams[1].name}`);
+    Sound.say(m.audio, text);
+  }
+});
+
+Net.onConn = st => {
+  $("connDot").className = "dot " + st;
+  $("connText").textContent = { on: "서버 연결됨", off: "서버 연결 끊김 · 다시 연결 중", mock: "가짜 모드 (백엔드 없이 테스트)" }[st];
+};
+
+// ---------- 버튼 ----------
+$("soundBtn").onclick = () => { Sound.unlock(); $("gate").classList.add("hide"); };
+document.addEventListener("keydown", e => {
+  if (e.key === "f" || e.key === "F") (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen()).catch(() => {});
+});
+
+function toast(msg) { const t = $("toast"); t.textContent = msg; t.style.display = "block"; clearTimeout(toast.t); toast.t = setTimeout(() => t.style.display = "none", 2500); }
+async function dev(kind) {
+  try {
+    if (kind === "kickoff") { await Net.post("/api/match", { teams: S.teams, half_minutes: 15 }); await Net.post("/api/match/kickoff"); }
+    else if (kind === "goalA" || kind === "goalB") await Net.post("/api/goals/manual", { team: kind.slice(-1) });
+    else if (kind === "left") await Net.post("/api/events/goal", { goal_side: "left", ts: 0, conf: 1, source: "test" });
+    else if (kind === "scorer" && S.lastGoal) {
+      const players = S.lastTeam ? teamOf(S.lastTeam).players : [];
+      const i = Math.floor(Math.random() * Math.max(players.length, 1));
+      await Net.post(`/api/goals/${S.lastGoal}/scorer`, { player_index: i, nick: players[i] });
+    }
+    else if (kind === "cancel" && S.lastGoal) await Net.post(`/api/goals/${S.lastGoal}/cancel`);
+    else if (kind === "half") await Net.post("/api/match/halftime", { swap: true });
+    else if (kind === "second") await Net.post("/api/match/second-half");
+    else if (kind === "end") await Net.post("/api/match/end");
+  } catch (e) { toast(e.message); }
+}
+if (MOCK || Q.has("dev")) $("dev").classList.add("show");
+$("dev").addEventListener("click", e => { const k = e.target.dataset.dev; if (k) dev(k); });
+
+renderTeams(); renderScore(); renderClock();
+Net.start();
+</script>
+</body>
+</html>
