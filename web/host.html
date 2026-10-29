@@ -103,6 +103,24 @@
   .banner { background: var(--bad); color: #fff; text-align: center; font-size: 14px; padding: 8px; border-radius: 10px; display: none; }
   .banner.show { display: block; }
   .mockbar { background: #fff7ed; color: var(--hl); font-size: 13px; text-align: center; padding: 6px; border-radius: 10px; }
+  /* 경기 화면: 폰 한 화면에 들어오게 촘촘하게 */
+  .mview { display: flex; flex-direction: column; gap: 8px; flex: 1; }
+  .mview .card { padding: 10px 12px; gap: 8px; border-radius: 12px; }
+  .mview .sb .n { font-size: 40px; }
+  .mview .sb .c { font-size: 24px; }
+  .mview .sb .t { gap: 2px; }
+  .mview .goal h2 { font-size: 20px; display: flex; align-items: center; justify-content: center; gap: 8px; }
+  .mview .goal .sit { font-size: 12px; }
+  .mview .goal .sub { font-size: 12px; color: var(--muted); margin-top: -4px; }
+  .mview .btn { min-height: 46px; font-size: 16px; border-radius: 12px; }
+  .mview .who { gap: 6px; }
+  .mview .who button { min-height: 44px; font-size: 15px; }
+  .mview .goal .link { padding: 2px; font-size: 13px; }
+  .mview .manual button { min-height: 44px; }
+  .mview .waiting { padding: 12px; font-size: 13px; }
+  .mview .bottom { margin-top: 0; padding-top: 0; }
+  .mview .bottom .btn { min-height: 46px; }
+  .mview .log .item { padding: 6px 0; }
   .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: #111; color: #fff; padding: 12px 18px; border-radius: 12px; font-size: 14px; display: none; z-index: 9; max-width: 90vw; }
 </style>
 </head>
@@ -433,17 +451,14 @@ function goalPanel() {
     <button class="link" data-act="dismiss">닫기</button></div>`;
   const players = t.players.filter(p => p.trim());
   return `<div class="card goal" style="--c:${t.color}">
-    <h2>${esc(tname(t, teamIndex(g.team)))} 골!</h2>
-    <div><span class="sit">${esc(g.situation || "골")}</span></div>
-    <p class="hint">${g.nick ? `${esc(g.nick)} · 2차 해설이 나갔습니다` : "1차 해설이 나갔습니다"}</p>
+    <h2>${esc(tname(t, teamIndex(g.team)))} 골! <span class="sit">${esc(g.situation || "골")}</span></h2>
+    <div class="sub">${g.nick ? `${esc(g.nick)} · 2차 해설이 나갔습니다` : "1차 해설이 나갔습니다 · 별명을 누르면 2차 해설"}</div>
     <div class="cd"><div class="meta"><span>노골 정정 가능</span><span id="cdText">${left}초</span></div>
       <div class="track"><i id="cdBar" style="width:${left * 10}%"></i></div></div>
     <button class="btn danger" id="cancelBtn" data-act="cancel" ${left <= 0 ? "disabled" : ""}>노골 · 판독 취소</button>
-    <div class="label" style="text-align:left">누가 넣었나요?</div>
     ${players.length ? `<div class="who">${t.players.map((p, j) => p.trim() ? `<button class="${g.nick === p ? "sel" : ""}" data-act="scorer" data-j="${j}">${esc(p)}</button>` : "").join("")}</div>`
                      : `<p class="hint">등록된 별명이 없습니다.</p>`}
     <button class="link" data-act="dismiss">모름 · 팀 이름으로만</button>
-    <p class="hint">별명을 누르는 즉시 2차 해설이 나갑니다. 몇 초 늦어도 됩니다.</p>
   </div>`;
 }
 function goalLog(limit) {
@@ -461,18 +476,17 @@ function goalLog(limit) {
 }
 function viewMatch() {
   const isFirst = H.phase === "first_half";
-  return `<div class="live-top"><span>${esc(Clock.label())} <b id="clock">${Clock.text()}</b></span><span>${esc(H.teams[0].name || "A팀")} vs ${esc(H.teams[1].name || "B팀")}</span></div>
+  return `<div class="mview">
+    <div class="live-top"><span>${esc(Clock.label())} <b id="clock">${Clock.text()}</b></span><span>${esc(H.teams[0].name || "A팀")} vs ${esc(H.teams[1].name || "B팀")}</span></div>
     <div class="card">${scoreRow()}</div>
     ${goalPanel()}
-    <div class="card">
-      <div class="label">수동 골 (감지가 놓친 골, 반대편 골대)</div>
-      <div class="manual">${[0, 1].map(i => `<button style="--c:${H.teams[i].color}" data-act="manual" data-team="${TEAM_IDS[i]}">+ ${esc(tname(H.teams[i], i))} 골</button>`).join("")}</div>
-    </div>
-    <div class="card"><div class="label">득점 기록</div>${goalLog(5)}</div>
+    <div class="manual">${[0, 1].map(i => `<button style="--c:${H.teams[i].color}" data-act="manual" data-team="${TEAM_IDS[i]}">+ ${esc(tname(H.teams[i], i))} 수동 골</button>`).join("")}</div>
     <div class="bottom">
       ${isFirst ? `<button class="btn ghost" data-act="halftime">하프타임</button>` : ""}
       <button class="btn ${H.endArmed ? "danger" : "ghost"}" data-act="end">${H.endArmed ? "한 번 더 누르면 종료" : "경기 종료"}</button>
-    </div>`;
+    </div>
+    <div class="card"><div class="label">득점 기록</div>${goalLog(5)}</div>
+  </div>`;
 }
 
 // ---------- 4. 하프타임 ----------
