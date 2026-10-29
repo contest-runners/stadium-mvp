@@ -1,7 +1,12 @@
-# 스타디움 연출 백엔드 API 계약 (v2.1, 10/29)
+# 스타디움 연출 백엔드 API 계약 (v2.2, 10/29)
 
 - 서버: 통합 노트북 `http://<노트북IP>:8000` (같은 노트북에서는 `http://localhost:8000`)
 - 이 문서는 이(백엔드)가 관리합니다. 바꿀 때는 오·최에게 먼저 알립니다.
+
+## v2.2에서 바뀐 점 (10/29 노골 카운트다운)
+
+- `goal` 메시지에 `server_now`(보내는 순간의 서버 시각, Unix ms)가 추가됐습니다. 폰과 노트북 시계가 어긋나도 화면이 이 값으로 보정해 노골 정정 카운트다운을 셉니다.
+- 노골 정정(`POST /api/goals/{goal_id}/cancel`)은 `cancel_deadline` 뒤 1초까지 받습니다(네트워크 지연 여유). `cancel_deadline`, `cancel_until` 값은 그대로 골 후 10초입니다.
 
 ## v2.1에서 바뀐 점 (10/29 리허설 점검 뒤)
 
@@ -52,13 +57,14 @@
   "text": "B팀! 드디어 경기를 뒤집습니다! 역전골!!",
   "cancel_deadline": 1793241010000,
   "cancel_until": 1793241010000,
+  "server_now": 1793241000000,
   "score": {"A": 1, "B": 2},
   "time": "07:41",
   "half": 2
 }
 ```
 
-`cancel_until`(Unix ms, `cancel_deadline`과 같은 값)까지 주최자 폰에 "노골" 버튼과 카운트다운을 보여 줍니다. `score`는 이 골이 들어간 뒤의 점수, `time`은 그 반이 시작된 뒤 지난 시간입니다.
+`cancel_until`(Unix ms, `cancel_deadline`과 같은 값)까지 주최자 폰에 "노골" 버튼과 카운트다운을 보여 줍니다. `cancel_until`은 서버 시계 기준이므로, 폰은 자기 시계(`Date.now()`)와 바로 비교하지 말고 `server_now`(이 메시지를 보낸 순간의 서버 시각)로 보정합니다. 예: 남은 시간 = `cancel_until - server_now`(골 직후라 10초) − 메시지를 받은 뒤 지난 시간. `score`는 이 골이 들어간 뒤의 점수, `time`은 그 반이 시작된 뒤 지난 시간입니다.
 
 ### scorer_set (득점자 탭 후 2차 해설)
 
@@ -153,7 +159,7 @@
 - `POST /api/events/goal` — 감지 스크립트가 보내는 골 신호입니다.
   본문: `{"goal_side": "left", "ts": 12.4, "conf": 0.91, "source": "live"}`
   응답(항상 200): `{"accepted": true, "goal_id": 3}` 또는 `{"accepted": false, "reason": "cooldown"}` 또는 `{"accepted": false, "reason": "not_in_play"}`
-- `POST /api/goals/{goal_id}/cancel` — 본문 없음. `cancel_deadline`이 지나면 409입니다.
+- `POST /api/goals/{goal_id}/cancel` — 본문 없음. `cancel_deadline` 뒤 1초까지는 받고(네트워크 지연 여유), 그보다 늦으면 409입니다.
 - `POST /api/goals/{goal_id}/scorer` — 본문 `{"nickname": "호랑이"}`, `{"nick": "호랑이"}`, `{"player_index": 0}` 중 하나. 여러 개가 오면 `nickname` → `nick` → `player_index` 순으로 씁니다. `player_index`는 득점 팀 `players` 배열의 위치입니다. 득점 팀 선수가 아니면 400입니다. 다시 보내면 득점자가 바뀝니다.
 - `POST /api/goals/manual` — 본문 `{"team": "A"}`. 감지가 놓친 골을 수동으로 넣습니다. 쿨다운이 없고 `source`는 `"manual"`입니다.
 - `GET /api/match` — 경기 상태입니다. 새로고침이나 재접속 때 씁니다.

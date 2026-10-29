@@ -104,10 +104,33 @@ def test_cancel_window(client, clock):
     assert r.json()["goals"][0]["cancelled"] is True
 
     goal_id = manual(client, "A")
-    clock.advance(11)
+    clock.advance(12)  # past the 10 s window and the 1 s grace
     assert client.post(f"/api/goals/{goal_id}/cancel").status_code == 409
     assert state(client)["score"] == {"A": 1, "B": 0}
     assert client.post("/api/goals/99/cancel").status_code == 404
+
+
+def test_cancel_grace_after_deadline(client, clock):
+    start(client)
+    goal_id = manual(client, "A")
+    clock.advance(10.5)  # 0.5 s after cancel_deadline
+    assert client.post(f"/api/goals/{goal_id}/cancel").status_code == 200
+
+    goal_id = manual(client, "B")
+    clock.advance(11.5)  # 1.5 s after cancel_deadline
+    assert client.post(f"/api/goals/{goal_id}/cancel").status_code == 409
+    assert state(client)["score"] == {"A": 0, "B": 1}
+
+
+def test_goal_message_has_server_now(client, clock):
+    recorder = record()
+    start(client)
+    clock.advance(30)
+    manual(client, "A")
+    goal = recorder.of("goal")[0]
+    assert goal["server_now"] == clock.t
+    # cancel_deadline and cancel_until stay 10 s after the goal.
+    assert goal["cancel_until"] - goal["server_now"] == goal["cancel_deadline"] - goal["server_now"] == 10_000
 
 
 def test_situation_ignores_cancelled_goal(client):

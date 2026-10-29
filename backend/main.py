@@ -2,7 +2,7 @@
 
 Takes goal signals, decides score and situation, picks the commentary audio and
 pushes it over WebSocket to the scoreboard and the host's phone. All state is
-one in-memory dict. The contract with web (오) and detector (최) is backend/API.md (v2.1).
+one in-memory dict. The contract with web (오) and detector (최) is backend/API.md (v2.2).
 
 Run from the repo root:
     uvicorn backend.main:app --host 0.0.0.0 --port 8000
@@ -31,6 +31,7 @@ RESULTS_DIR = ROOT / "eval" / "results"
 
 COOLDOWN_MS = 10_000  # detector signals on the same goal mouth
 CANCEL_WINDOW_MS = 10_000
+CANCEL_GRACE_MS = 1_000  # cancel requests still accepted this long after the deadline (network delay)
 IN_PLAY = ("first_half", "second_half")
 LIVE = ("first_half", "halftime", "second_half")
 # Goal fields sent to the screens (plus time and nick). The rest (ts, conf, received_at,
@@ -291,6 +292,7 @@ async def add_goal(team: str, source: str, ts: float | None = None, conf: float 
         "text": lines.TEAM_LINES[sit].format(name=name),
         "cancel_deadline": goal["cancel_deadline"],
         "cancel_until": goal["cancel_deadline"],
+        "server_now": now,  # lets the phone correct for its own clock when counting down to cancel_until
         "score": score(),
         "time": goal["clock"],
         "half": goal["half"],
@@ -426,7 +428,7 @@ async def cancel_goal(goal_id: int):
     if goal["cancelled"]:
         raise HTTPException(409, f"{goal_id}번 골은 이미 취소됐습니다.")
     now = now_ms()
-    if now > goal["cancel_deadline"]:
+    if now > goal["cancel_deadline"] + CANCEL_GRACE_MS:
         raise HTTPException(409, f"{goal_id}번 골은 취소 가능 시간(10초)이 지났습니다.")
     goal.update(cancelled=True, cancelled_at=now)
     refresh_sit2()
