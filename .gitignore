@@ -224,3 +224,4 @@ eval/videos/
 
 # Certificates and private keys made by the web live-test tool
 *.pem
+*.pt
