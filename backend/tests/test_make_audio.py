@@ -13,7 +13,7 @@ def test_makes_every_needed_file(tmp_path, fake_tts):
     assert result["skipped"] == [] and result["failed"] == []
     assert len(fake_tts) == EXPECTED
     assert len(list(tmp_path.glob("*.mp3"))) == EXPECTED
-    assert not (tmp_path / "fixed_crowd.mp3").exists()
+    assert not (tmp_path / "cheer.mp3").exists()
 
 
 def test_skips_existing_files(tmp_path, fake_tts):

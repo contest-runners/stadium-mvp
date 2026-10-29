@@ -1,7 +1,8 @@
 """Commentary lines and the audio file naming rule.
 
 The server and the audio generation script both use this module, so a line's
-text and its mp3 path always agree.
+text and its mp3 file name always agree. Messages carry only the file name;
+screens request "/audio/" + encodeURIComponent(name).
 """
 import re
 
@@ -35,7 +36,7 @@ FIXED_LINES = {
 }
 
 # Crowd cheer. A person drops this file in; it is not generated.
-CROWD_URL = "/audio/fixed_crowd.mp3"
+CROWD_FILE = "cheer.mp3"
 
 _FORBIDDEN = re.compile(r'[\\/:*?"<>|]')
 
@@ -56,12 +57,8 @@ def audio_file(kind: str, name: str, situation: str | None = None) -> str:
     return f"{kind}_{clean_name(name)}_{situation}.mp3"
 
 
-def audio_url(kind: str, name: str, situation: str | None = None) -> str:
-    return "/audio/" + audio_file(kind, name, situation)
-
-
 def required_audio(team_names: list[str], nicknames: list[str]) -> dict[str, str]:
-    """Every mp3 the given names need, as {file name: text to speak}. fixed_crowd is not included."""
+    """Every mp3 the given names need, as {file name: text to speak}. The crowd cheer is not included."""
     files = {}
     for name in team_names:
         for situation, line in TEAM_LINES.items():

@@ -43,9 +43,10 @@ function render(m) {
   $("status").textContent = STATUS[m.status] || m.status;
 }
 
-function playFile(src) {
+// Rule 3: messages carry only the file name.
+function playFile(name) {
   return new Promise((resolve, reject) => {
-    const audio = new Audio(src);
+    const audio = new Audio("/audio/" + encodeURIComponent(name));
     audio.onended = resolve;
     audio.onerror = reject;
     audio.play().catch(reject);
@@ -62,7 +63,7 @@ function speak(text) {
   });
 }
 
-// Rules 3-4: sfx (if any), then audio; if audio fails, read `text` aloud.
+// Rule 4: sfx (if any), then audio; if audio fails, read `text` aloud.
 async function playEffect(msg) {
   if (msg.sfx) await playFile(msg.sfx).catch(() => {});
   await playFile(msg.audio).catch(() => speak(msg.text));
@@ -73,7 +74,7 @@ function connect() {
   ws.onopen = () => { $("conn").textContent = ""; };
   ws.onmessage = (e) => {
     const msg = JSON.parse(e.data);
-    if (msg.type === "state") return render(msg.match);
+    if (msg.type === "state") return render(msg);
     if (!EFFECTS.includes(msg.type)) return;
     // Rule 2: effects never touch the score; the next `state` does.
     $("line").textContent = msg.text;

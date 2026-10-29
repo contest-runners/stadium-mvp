@@ -1,8 +1,8 @@
 """Generate the commentary mp3s with edge-tts.
 
 Names come from audio/names.json (same format as devtool setup). Texts and file
-names come from backend/lines.py. fixed_crowd.mp3 is not generated; a person
-picks a free crowd sound and drops it in.
+names come from backend/lines.py. The crowd cheer (lines.CROWD_FILE, cheer.mp3)
+is not generated; a person picks a free crowd sound and drops it in.
 
     python -m backend.make_audio
     python -m backend.make_audio --force --voice ko-KR-HyunsuMultilingualNeural --rate=+25%
