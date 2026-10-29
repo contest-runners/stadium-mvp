@@ -113,7 +113,35 @@ print("-" * len(hdr))
 for r in results[:a.top]:
     print(f"{r['conf']:5.2f} {r['min_in']:6.2f} {r['gap']:4.1f} {r['rearm']:5.1f} {r['cooldown']:3.0f} "
           f"{r['ball_min']:4.0f} {r['ball_max']:4.0f} | {r['tp']:>2}/{len(TRUE):<2} {r['fp']:>3}  {r['fp_times']}")
+
+# 정탐을 조금 포기하면 오탐이 얼마나 줄어드나 (오탐 수별 최선)
+print("\n=== 오탐 수별 최선 (정탐 vs 오탐 트레이드오프) ===")
+seen = {}
+for r in sorted(results, key=lambda r: (r["fp"], -r["tp"])):
+    if r["fp"] not in seen or r["tp"] > seen[r["fp"]]["tp"]:
+        seen[r["fp"]] = r
+prev_tp = -1
+for fp_n in sorted(seen):
+    r = seen[fp_n]
+    if r["tp"] <= prev_tp:
+        continue
+    prev_tp = r["tp"]
+    opt = (f"--conf {r['conf']} --min-in {r['min_in']} --gap {r['gap']} --rearm {r['rearm']} --cooldown {r['cooldown']:.0f}"
+           + (f" --ball-min {r['ball_min']:.0f}" if r['ball_min'] else "")
+           + (f" --ball-max {r['ball_max']:.0f}" if r['ball_max'] else ""))
+    print(f"  오탐 {fp_n:>2} → 정탐 {r['tp']}/{len(TRUE)}   {opt}")
+
+# 1위 설정의 오탐 장면: 그 순간 골문 안에서 잡힌 공의 크기·신뢰도
 best = results[0]
+if best["fp_times"]:
+    print("\n=== 1위 설정의 오탐 장면 (직전 0.5초, 골문 안 검출) → 크기 필터·conf 참고 ===")
+    for ft in map(float, best["fp_times"].split()):
+        ins = [b for t, b in dets if ft - 0.5 <= t <= ft + 0.05 and b is not None
+               and b[3] >= best["conf"] and inside(b)]
+        if ins:
+            print(f"  {ft:7.1f}s  {len(ins)}프레임, 크기 {min(b[2] for b in ins):.0f}~{max(b[2] for b in ins):.0f}px, "
+                  f"conf {min(b[3] for b in ins):.2f}~{max(b[3] for b in ins):.2f}, "
+                  f"위치 ({ins[-1][0]:.0f}, {ins[-1][1]:.0f})")
 print(f"\n추천 → run.py에 붙일 옵션: --conf {best['conf']} --min-in {best['min_in']} --gap {best['gap']} "
       f"--rearm {best['rearm']} --cooldown {best['cooldown']:.0f}"
       + (f" --ball-min {best['ball_min']:.0f}" if best['ball_min'] else "")
