@@ -222,6 +222,10 @@ __marimo__/
 # Evaluation videos (shared via Google Drive, not committed)
 eval/videos/
 
+# Detector overlay videos and goal-event CSVs (overlays can exceed GitHub's 100 MB limit)
+eval/results/*.mp4
+eval/results/*.csv
+
 # Certificates and private keys made by the web live-test tool
 *.pem
 *.pt
