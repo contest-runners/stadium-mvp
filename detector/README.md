@@ -28,3 +28,14 @@ python detector/run.py --video 영상.mp4 --goal-side left --server http://local
 python detector/run.py --video 영상.mp4 --goal-side left --no-realtime --no-show --events-out ev.csv --save overlay.mp4
 python detector/replay.py --video overlay.mp4 --events ev.csv --goal-side left --server http://localhost:8000
 ```
+
+## 판정 설정 튜닝 (모델은 한 번만 돌리고 설정만 바꿔 보기)
+```
+# 1) 검출 결과 저장 (영상마다 1번, GPU면 1~2분 / CPU면 10분 내외)
+python detector/detect_dump.py --video 영상.mp4 --out eval/results/영상_dets.csv
+
+# 2) 실제 골 시각 넣고 설정 비교 (몇 초)
+python detector/tune.py --dets eval/results/영상_dets.csv --goal detector/goal_left.json --true 12,27,39,58,75,95,107
+```
+- 실제 골마다 놓친 이유(검출 실패 / 골문 밖 / 판정 기준 미달) 진단
+- 설정 조합별 정탐·오탐 표 + run.py에 붙일 추천 옵션 출력
