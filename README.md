@@ -21,7 +21,7 @@ python -m venv .venv
 .venv/Scripts/python.exe -m pip install ultralytics
 ```
 
-ultralytics는 감지용입니다(PyTorch, OpenCV가 같이 설치됩니다). GPU가 없어도 CPU에서 동작합니다. 공 감지 모델 `detector/weights/ball_s.pt`는 저장소에 들어 있습니다. 평가 영상은 Google Drive에서 받아 `eval/videos/`에 넣습니다: [영상 링크]
+ultralytics는 감지용입니다(PyTorch, OpenCV가 같이 설치됩니다). GPU가 없어도 CPU에서 동작합니다. 공 감지 모델 `detector/weights/ball_s.pt`는 저장소에 들어 있습니다. 평가에 쓴 원본 촬영 영상은 용량 때문에 저장소에 없고 `eval/videos/`에 따로 넣어 씁니다. 시연 영상: [시연 영상 링크]
 
 ## 실행 순서
 
@@ -79,5 +79,5 @@ ultralytics는 감지용입니다(PyTorch, OpenCV가 같이 설치됩니다). GP
 - 이 — 백엔드(골 판정·점수·상황 분류·실시간 전송)와 해설 음성 생성 (`backend/`, `audio/`)
 - 최 — 공 감지 모델과 골 감지 스크립트 (`detector/`)
 - 오 — 점수판과 주최자 폰 화면 (`web/`)
-- 조 — 평가와 데이터셋 정리 (`eval/`)
-- 재헌 — [역할]
+- 조 — 실측(감지 정확도·지연), 데이터셋 정리, 고도화·사업화 서류 (`eval/`)
+- 재헌 — 팀장: 결정, 서류 합본, 제출
