@@ -2,7 +2,7 @@
 
 Takes goal signals, decides score and situation, picks the commentary audio and
 pushes it over WebSocket to the scoreboard and the host's phone. All state is
-one in-memory dict. The contract with web (오) and detector (최) is backend/API.md (v2).
+one in-memory dict. The contract with web (오) and detector (최) is backend/API.md (v2.1).
 
 Run from the repo root:
     uvicorn backend.main:app --host 0.0.0.0 --port 8000
@@ -35,7 +35,8 @@ IN_PLAY = ("first_half", "second_half")
 LIVE = ("first_half", "halftime", "second_half")
 # Goal fields sent to the screens (plus time and nick). The rest (ts, conf, received_at,
 # cancelled_at) only go to the results file.
-GOAL_FIELDS = ("goal_id", "team", "scorer", "situation", "half", "clock", "source", "cancelled", "cancel_deadline")
+GOAL_FIELDS = ("goal_id", "team", "scorer", "situation", "sit2", "half", "clock", "source", "cancelled",
+               "cancel_deadline")
 FIRST_HALF_SIDES = {"left": "A", "right": "B"}  # team defending each goal at kickoff
 
 
@@ -51,6 +52,7 @@ def default_match() -> dict:
         "half_minutes": 15,
         "swap_at_half": False,  # stored only; the swap sent at halftime decides
         "period_started_at": None,
+        "stopped_elapsed": 0,  # seconds shown while the clock is stopped (halftime, ended)
         "teams": {"A": {"name": "A팀", "color": "#f97316"}, "B": {"name": "B팀", "color": "#3b82f6"}},
         "players": {"A": [], "B": []},
         "swapped": False,
@@ -120,7 +122,7 @@ class GoalSignal(BaseModel):
     goal_side: Literal["left", "right"]
     ts: float | None = None
     conf: float | None = None
-    source: Literal["live", "replay"] = "live"
+    source: str | None = None  # any label is recorded as sent; missing or null means "live"
 
 
 class ManualGoalIn(BaseModel):
@@ -174,8 +176,26 @@ def audio_ready() -> bool:
     return all((AUDIO_DIR / f).is_file() for f in lines.required_audio(team_names, nicknames))
 
 
+def refresh_sit2():
+    """Mark each player's third valid goal, in time order, as the hat trick; every other goal gets None."""
+    counts = {}
+    for g in MATCH["goals"]:
+        g["sit2"] = None
+        if g["cancelled"] or g["scorer"] is None:
+            continue
+        key = (g["team"], g["scorer"])
+        counts[key] = counts.get(key, 0) + 1
+        if counts[key] == 3:
+            g["sit2"] = "해트트릭"
+
+
 def goal_view(goal: dict) -> dict:
     return {**{k: goal[k] for k in GOAL_FIELDS}, "time": goal["clock"], "nick": goal["scorer"]}
+
+
+def period_elapsed(now: int) -> int:
+    """Whole seconds since the current half started. Only valid while a half is running."""
+    return (now - MATCH["period_started_at"]) // 1000
 
 
 def public_state() -> dict:
@@ -188,7 +208,7 @@ def public_state() -> dict:
         "half_minutes": MATCH["half_minutes"],
         "period_started_at": MATCH["period_started_at"],
         "server_now": now,
-        "clock": {"running": running, "elapsed": (now - MATCH["period_started_at"]) // 1000 if running else 0},
+        "clock": {"running": running, "elapsed": period_elapsed(now) if running else MATCH["stopped_elapsed"]},
         "teams": {t: {**MATCH["teams"][t], "players": MATCH["players"][t]} for t in ("A", "B")},
         "players": MATCH["players"],
         "score": score(),
@@ -242,12 +262,13 @@ def pick_scorer(body: ScorerIn, team: str) -> str:
 async def add_goal(team: str, source: str, ts: float | None = None, conf: float | None = None) -> int:
     now = now_ms()
     sit = situation.goal_situation([g["team"] for g in valid_goals()], team)
-    elapsed = (now - MATCH["period_started_at"]) // 1000
+    elapsed = period_elapsed(now)
     goal = {
         "goal_id": len(MATCH["goals"]) + 1,
         "team": team,
         "scorer": None,
         "situation": sit,
+        "sit2": None,  # "해트트릭" on a player's third valid goal; see refresh_sit2
         "half": MATCH["half"],
         "clock": f"{elapsed // 60:02d}:{elapsed % 60:02d}",
         "source": source,
@@ -343,7 +364,7 @@ async def halftime(body: HalftimeIn | None = None):
         await publish()
         return public_state()
     require_status("first_half")
-    MATCH.update(status="halftime", period_started_at=None, swapped=swap)
+    MATCH.update(status="halftime", stopped_elapsed=period_elapsed(now_ms()), period_started_at=None, swapped=swap)
     await publish({"type": "period", "status": "halftime", **fixed_line("halftime")})
     return public_state()
 
@@ -359,6 +380,8 @@ async def second_half():
 @app.post("/api/match/end")
 async def end_match():
     require_status(*LIVE)
+    if MATCH["status"] in IN_PLAY:  # ended from halftime keeps the first half's stopped time
+        MATCH["stopped_elapsed"] = period_elapsed(now_ms())
     MATCH.update(status="ended", period_started_at=None)
     print(f"결과 저장: {save_results()}", flush=True)
     final = score()
@@ -386,7 +409,8 @@ async def goal_signal(body: GoalSignal):
     MATCH["last_signal_at"][body.goal_side] = now
     # The goal mouth's defender conceded, so the other team scored.
     team = other(sides()[body.goal_side])
-    return {"accepted": True, "goal_id": await add_goal(team, body.source, body.ts, body.conf)}
+    source = "live" if body.source is None else body.source
+    return {"accepted": True, "goal_id": await add_goal(team, source, body.ts, body.conf)}
 
 
 @app.post("/api/goals/manual")
@@ -405,6 +429,7 @@ async def cancel_goal(goal_id: int):
     if now > goal["cancel_deadline"]:
         raise HTTPException(409, f"{goal_id}번 골은 취소 가능 시간(10초)이 지났습니다.")
     goal.update(cancelled=True, cancelled_at=now)
+    refresh_sit2()
     await publish({
         "type": "goal_cancelled",
         "goal_id": goal_id,
@@ -426,6 +451,7 @@ async def set_scorer(goal_id: int, body: ScorerIn):
     if nickname not in MATCH["players"][team]:
         raise HTTPException(400, f"{nickname}은(는) {MATCH['teams'][team]['name']} 선수가 아닙니다.")
     goal["scorer"] = nickname
+    refresh_sit2()
     player_goals = sum(1 for g in valid_goals() if g["team"] == team and g["scorer"] == nickname)
     sit = situation.scorer_situation(player_goals, goal["situation"])
     await publish({

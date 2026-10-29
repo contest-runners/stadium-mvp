@@ -71,6 +71,20 @@ def test_goal_signal_and_cooldown(client, clock):
     assert state(client)["goals"][2]["situation"] == "앞서가는골"
 
 
+def test_goal_signal_records_any_source(client, clock):
+    start(client)
+    body = {"goal_side": "left", "ts": 1.0, "conf": 1}
+    assert client.post("/api/events/goal", json={**body, "source": "test"}).json()["accepted"] is True
+    clock.advance(11)
+    client.post("/api/events/goal", json=body)  # no source
+    clock.advance(11)
+    client.post("/api/events/goal", json={**body, "source": None})
+    clock.advance(11)
+    client.post("/api/events/goal", json={**body, "source": "replay"})
+    assert [g["source"] for g in state(client)["goals"]] == ["test", "live", "live", "replay"]
+    assert client.post("/api/events/goal", json={**body, "source": 1}).status_code == 400
+
+
 def test_not_in_play(client):
     assert client.post("/api/match", json=MATCH_BODY).status_code == 200
     assert signal(client, "left") == {"accepted": False, "reason": "not_in_play"}
@@ -217,7 +231,78 @@ def test_state_is_flat_with_v2_fields(client, clock):
     assert (goal["half"], goal["clock"], goal["time"], goal["nick"]) == (1, "01:15", "01:15", "독수리")
 
     client.post("/api/match/halftime", json={"swap": False})
+    assert state(client)["clock"] == {"running": False, "elapsed": 75}
+
+
+def test_clock_keeps_elapsed_when_stopped(client, clock):
+    assert client.post("/api/match", json=MATCH_BODY).status_code == 200
     assert state(client)["clock"] == {"running": False, "elapsed": 0}
+    client.post("/api/match/kickoff")
+    clock.advance(75)
+    client.post("/api/match/halftime", json={"swap": True})
+    clock.advance(30)
+    client.post("/api/match/halftime", json={"swap": False})  # the side choice re-sent
+    assert state(client)["clock"] == {"running": False, "elapsed": 75}
+
+    client.post("/api/match/second-half")
+    assert state(client)["clock"] == {"running": True, "elapsed": 0}
+    clock.advance(40)
+    manual(client, "A")
+    assert state(client)["goals"][0]["time"] == "00:40"
+    client.post("/api/match/end")
+    clock.advance(10)
+    assert state(client)["clock"] == {"running": False, "elapsed": 40}
+
+    # Ending from halftime keeps the first half's stopped time; a new match starts from 0.
+    client.post("/api/match", json=MATCH_BODY)
+    client.post("/api/match/kickoff")
+    clock.advance(20)
+    client.post("/api/match/halftime")
+    client.post("/api/match/end")
+    assert state(client)["clock"] == {"running": False, "elapsed": 20}
+    client.post("/api/match", json=MATCH_BODY)
+    assert state(client)["clock"] == {"running": False, "elapsed": 0}
+
+
+def test_sit2_marks_third_goal_of_player(client, clock):
+    recorder = record()
+    start(client)
+
+    def score_by(team, nickname):
+        goal_id = manual(client, team)
+        client.post(f"/api/goals/{goal_id}/scorer", json={"nickname": nickname})
+        return goal_id
+
+    def sit2():
+        return [g["sit2"] for g in state(client)["goals"]]
+
+    for _ in range(3):
+        score_by("A", "호랑이")
+    assert sit2() == [None, None, "해트트릭"]
+    # The state sent right after scorer_set already carries it, so the host's log keeps the tag.
+    assert recorder.messages[-1]["type"] == "state"
+    assert [g["sit2"] for g in recorder.messages[-1]["goals"]] == [None, None, "해트트릭"]
+
+    client.post("/api/goals/2/scorer", json={"nickname": "번개"})  # scorer changed: only 2 left
+    assert sit2() == [None, None, None]
+    client.post("/api/goals/2/scorer", json={"nickname": "호랑이"})
+    assert sit2() == [None, None, "해트트릭"]
+
+    # Scorers named out of order: the third goal in time gets it, not the last one named.
+    b_goals = [manual(client, "B") for _ in range(3)]
+    for goal_id in reversed(b_goals):
+        client.post(f"/api/goals/{goal_id}/scorer", json={"nickname": "독수리"})
+    assert sit2() == [None, None, "해트트릭", None, None, "해트트릭"]
+
+    client.post("/api/goals/1/cancel")  # 호랑이 drops to 2 valid goals
+    assert sit2() == [None, None, None, None, None, "해트트릭"]
+    score_by("A", "호랑이")
+    assert sit2() == [None, None, None, None, None, "해트트릭", "해트트릭"]
+
+    client.post("/api/match/end")
+    assert [g["sit2"] for g in recorder.of("match_end")[0]["goals"]] == sit2()
+    data = json.loads(next(main.RESULTS_DIR.glob("*.json")).read_text(encoding="utf-8"))
+    assert [g["sit2"] for g in data["goals"]] == sit2()
 
 
 def test_goal_message_has_score_and_cancel_until(client, clock):
