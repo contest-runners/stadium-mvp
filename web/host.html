@@ -121,6 +121,7 @@
   .mview .bottom { margin-top: 0; padding-top: 0; }
   .mview .bottom .btn { min-height: 46px; }
   .mview .log .item { padding: 6px 0; }
+  .mview .link.fs { padding: 0 0 0 6px; font-size: 13px; }
   .toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: #111; color: #fff; padding: 12px 18px; border-radius: 12px; font-size: 14px; display: none; z-index: 9; max-width: 90vw; }
 </style>
 </head>
@@ -477,7 +478,7 @@ function goalLog(limit) {
 function viewMatch() {
   const isFirst = H.phase === "first_half";
   return `<div class="mview">
-    <div class="live-top"><span>${esc(Clock.label())} <b id="clock">${Clock.text()}</b></span><span>${esc(H.teams[0].name || "A팀")} vs ${esc(H.teams[1].name || "B팀")}</span></div>
+    <div class="live-top"><span>${esc(Clock.label())} <b id="clock">${Clock.text()}</b></span><span>${esc(H.teams[0].name || "A팀")} vs ${esc(H.teams[1].name || "B팀")}${document.fullscreenElement ? "" : ` <button class="link fs" data-act="fullscreen">전체 화면</button>`}</span></div>
     <div class="card">${scoreRow()}</div>
     ${goalPanel()}
     <div class="manual">${[0, 1].map(i => `<button style="--c:${H.teams[i].color}" data-act="manual" data-team="${TEAM_IDS[i]}">+ ${esc(tname(H.teams[i], i))} 수동 골</button>`).join("")}</div>
@@ -571,6 +572,10 @@ $("app").addEventListener("input", e => {
 $("app").addEventListener("click", async e => {
   const b = e.target.closest("[data-act]"); if (!b) return;
   const act = b.dataset.act;
+  if (act === "fullscreen" || act === "kickoff") { // 주소 표시줄 숨기기 (안드로이드 크롬)
+    try { if (!document.fullscreenElement) document.documentElement.requestFullscreen({ navigationUI: "hide" }).catch(() => {}); } catch {}
+    if (act === "fullscreen") return;
+  }
   if (act !== "end") H.endArmed = false;
   try {
     switch (act) {
@@ -631,6 +636,7 @@ $("app").addEventListener("click", async e => {
   render();
 });
 
+document.addEventListener("fullscreenchange", () => render());
 render();
 Net.start();
 </script>
