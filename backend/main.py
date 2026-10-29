@@ -13,14 +13,14 @@ from datetime import datetime
 from pathlib import Path
 from typing import Annotated, Literal
 
-from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import AfterValidator, BaseModel, Field
 
-from . import lines, situation
+from . import lines, make_audio, situation
 
 ROOT = Path(__file__).resolve().parent.parent
 WEB_DIR = ROOT / "web"
@@ -234,14 +234,30 @@ def save_results() -> Path:
     return path
 
 
+async def prepare_audio(team_names: list[str], nicknames: list[str]):
+    """Make the missing mp3s for the new names, then push the recomputed audio_ready.
+
+    Runs after the response is sent. If edge-tts fails the match goes on and the
+    screens read `text` aloud instead.
+    """
+    try:
+        result = await make_audio.generate(team_names, nicknames, AUDIO_DIR)
+        print(f"음성 생성: 만듦 {len(result['made'])}, 건너뜀 {len(result['skipped'])}, 실패 {len(result['failed'])}",
+              flush=True)
+    except Exception as e:
+        print(f"음성 생성 중단: {type(e).__name__}: {e}", flush=True)
+    await publish()
+
+
 # ---- match flow ----
 
 @app.post("/api/match")
-async def new_match(body: MatchIn):
+async def new_match(body: MatchIn, background: BackgroundTasks):
     MATCH.clear()
     MATCH.update(default_match())
     MATCH.update(teams=body.teams.model_dump(), players=body.players.model_dump(), half_minutes=body.half_minutes)
     await publish()
+    background.add_task(prepare_audio, [body.teams.A.name, body.teams.B.name], body.players.A + body.players.B)
     return public_state()
 
 
@@ -280,7 +296,7 @@ async def second_half():
 async def end_match():
     require_status(*LIVE)
     MATCH.update(status="ended", period_started_at=None)
-    print(f"결과 저장: {save_results()}")
+    print(f"결과 저장: {save_results()}", flush=True)
     final = score()
     winner = "A" if final["A"] > final["B"] else "B" if final["B"] > final["A"] else None
     await publish({"type": "match_end", "score": final, "winner": winner, **fixed_line("match_end")})

@@ -1,7 +1,7 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from backend import main
+from backend import main, make_audio
 
 
 class Clock:
@@ -15,6 +15,19 @@ class Clock:
 
     def advance(self, seconds: float):
         self.t += int(seconds * 1000)
+
+
+@pytest.fixture(autouse=True)
+def fake_tts(monkeypatch):
+    """No test talks to edge-tts: synthesis writes a dummy file and records the text."""
+    texts = []
+
+    async def synthesize(text, path, voice, rate):
+        texts.append(text)
+        path.write_bytes(b"fake mp3")
+
+    monkeypatch.setattr(make_audio, "synthesize", synthesize)
+    return texts
 
 
 @pytest.fixture
