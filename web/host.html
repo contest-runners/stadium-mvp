@@ -123,8 +123,8 @@ const Q = new URLSearchParams(location.search);
 const SERVER = (Q.get("server") || (location.protocol.startsWith("http") ? location.origin : "")).replace(/\/$/, "");
 const MOCK = Q.has("mock") || !SERVER;
 const AUDIO_BASE = SERVER + "/audio/";
-const CHEER_FILE = "cheer.mp3";     // 함성 효과음 파일 이름 (이와 맞출 것)
-const NOGOAL_FILE = "노골.mp3";     // 노골 음성 파일 이름 (이와 맞출 것)
+const CHEER_FILE = "cheer.mp3";     // 함성 효과음 파일 이름 (백엔드 audio 폴더와 같은 이름)
+const NOGOAL_FILE = "fixed_no_goal.mp3";     // 노골 음성 파일 이름 (백엔드 audio 폴더와 같은 이름)
 const TEAM_IDS = ["A", "B"];
 const DEFAULT_COLORS = ["#f97316", "#3b82f6"];
 
@@ -310,7 +310,7 @@ const Mock = {
       this.emit(this.stateMsg());
     } else if (path === "/api/match/end") {
       this.stopClock(); s.phase = "ended";
-      this.emit({ type: "match_end", score: [...s.score], goals: s.goals, teams: s.teams, audio: "경기종료.mp3",
+      this.emit({ type: "match_end", score: [...s.score], goals: s.goals, teams: s.teams, audio: "fixed_match_end.mp3",
         text: `최종 스코어 ${s.score[0]} 대 ${s.score[1]}, 경기 종료입니다!` });
       this.emit(this.stateMsg());
     } else if (path === "/api/goals/manual") {

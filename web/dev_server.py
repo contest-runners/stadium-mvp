@@ -183,7 +183,7 @@ async def second_half(request):
 async def end(request):
     M.stop_clock()
     M.phase = "ended"
-    await broadcast({"type": "match_end", "score": list(M.score), "goals": M.goals, "audio": "경기종료.mp3",
+    await broadcast({"type": "match_end", "score": list(M.score), "goals": M.goals, "audio": "fixed_match_end.mp3",
                      "text": f"최종 스코어 {M.score[0]} 대 {M.score[1]}, 경기 종료입니다!"})
     await broadcast(M.state())
     return ok()
@@ -224,7 +224,7 @@ async def cancel(request):
     g["cancelled"] = True
     M.score[IDS.index(g["team"])] -= 1
     await broadcast({"type": "goal_cancelled", "goal_id": g["goal_id"], "team": g["team"], "score": list(M.score),
-                     "audio": "노골.mp3", "text": "판독 결과, 노골입니다!"})
+                     "audio": "fixed_no_goal.mp3", "text": "판독 결과, 노골입니다!"})
     return ok()
 
 
