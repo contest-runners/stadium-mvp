@@ -191,7 +191,10 @@ function normalize(m) {
   o.goal_id = m.goal_id ?? m.id;
   const a = m.audio || m.voice;
   o.audio = a ? (a.endsWith(".mp3") ? a : a + ".mp3") : null;
-  if (m.cancel_until) o.cancel_until_ms = m.cancel_until > 1e12 ? m.cancel_until : m.cancel_until * 1000;
+  if (m.cancel_until) { // 서버 시각 기준 마감 → 이 기기 시계 기준으로 바꿈 (폰·노트북 시계 차이 보정)
+    const abs = m.cancel_until > 1e12 ? m.cancel_until : m.cancel_until * 1000;
+    o.cancel_until_ms = m.server_now ? abs - m.server_now + Date.now() : abs;
+  }
   return o;
 }
 
