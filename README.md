@@ -74,7 +74,7 @@ ultralytics는 감지용입니다(PyTorch, OpenCV가 같이 설치됩니다). GP
 
 감지 모델: Ultralytics YOLO (AGPL-3.0). YOLO11s를 공 감지용으로 파인튜닝한 `detector/weights/ball_s.pt`를 씁니다.
 
-데이터셋: [조가 정리한 표]
+학습 데이터: Roboflow 공개 데이터셋과 자체 촬영 영상. 출처·라이선스는 [eval/datasets.md](eval/datasets.md) 참고
 
 ## 팀
 
