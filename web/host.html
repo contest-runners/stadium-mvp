@@ -177,7 +177,7 @@ function normTeams(t) {
 }
 function normGoal(g) {
   return { goal_id: g.goal_id ?? g.id, team: normTeamId(g.team), half: g.half ?? 1, time: g.time ?? g.clock ?? "",
-    situation: normSit(g.situation), nick: g.nick ?? g.scorer ?? null, cancelled: !!g.cancelled };
+    situation: normSit(g.situation), sit2: g.sit2 ?? null, nick: g.nick ?? g.scorer ?? null, cancelled: !!g.cancelled };
 }
 const TYPE_ALIAS = { goal_canceled: "goal_cancelled", cancel: "goal_cancelled", scorer: "scorer_set",
   fulltime: "match_end", end: "match_end", halftime: "state" };
