@@ -12,6 +12,9 @@
     --font: "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", system-ui, sans-serif;
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html { touch-action: manipulation; }   /* 두 번 탭 확대 끔 → 연속 탭이 씹히지 않음, 탭 지연 없음 */
+  button { touch-action: manipulation; user-select: none; -webkit-user-select: none; }
+  button:active:not(:disabled) { transform: scale(.97); filter: brightness(.94); }
   body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--font); font-size: 16px; line-height: 1.5;
          -webkit-font-smoothing: antialiased; word-break: keep-all; }
   .app { max-width: 480px; margin: 0 auto; min-height: 100vh; display: flex; flex-direction: column;
@@ -391,9 +394,19 @@ function head(title, step, total) {
   const bars = total ? `<div class="progress">${Array.from({ length: total }, (_, i) => `<i class="${i < step ? "on" : ""}"></i>`).join("")}</div>` : "";
   return `<header class="bar"><h1>${esc(title)}</h1>${step ? `<span class="step">${step} / ${total}</span>` : ""}</header>${bars}`;
 }
+// 손가락이 화면에 닿아 있는 동안에는 다시 그리지 않음.
+// (누르는 사이 서버 메시지로 버튼이 새로 그려지면 그 탭이 사라지기 때문)
+let pressing = false, pendingRender = false, lastHtml = "", pressTimer = null;
 function render() {
+  if (pressing) { pendingRender = true; return; }
   const fn = { setup1: viewSetup1, setup2: viewSetup2, match: viewMatch, halftime: viewHalftime, ended: viewEnded }[H.screen];
-  $("app").innerHTML = connBanner() + fn();
+  const html = connBanner() + fn();
+  if (html === lastHtml) return;          // 바뀐 게 없으면 버튼을 갈아 끼우지 않음
+  lastHtml = html; $("app").innerHTML = html;
+}
+function releasePress() {
+  clearTimeout(pressTimer);
+  pressTimer = setTimeout(() => { pressing = false; if (pendingRender) { pendingRender = false; render(); } }, 80);
 }
 
 // ---------- 1. 경기 만들기 ----------
@@ -564,6 +577,12 @@ setInterval(() => {
 }, 250);
 
 // ---------- 입력 ----------
+$("app").addEventListener("pointerdown", () => {
+  pressing = true; clearTimeout(pressTimer);
+  pressTimer = setTimeout(() => { pressing = false; if (pendingRender) { pendingRender = false; render(); } }, 1500); // 안전장치
+});
+$("app").addEventListener("pointerup", releasePress);
+$("app").addEventListener("pointercancel", releasePress);
 $("app").addEventListener("input", e => {
   const el = e.target;
   if (el.dataset.in === "name") H.teams[+el.dataset.i].name = el.value;
@@ -572,9 +591,9 @@ $("app").addEventListener("input", e => {
 $("app").addEventListener("click", async e => {
   const b = e.target.closest("[data-act]"); if (!b) return;
   const act = b.dataset.act;
-  if (act === "fullscreen" || act === "kickoff") { // 주소 표시줄 숨기기 (안드로이드 크롬)
+  if (act === "fullscreen") { // 주소 표시줄 숨기기 (안드로이드 크롬, 버튼을 눌렀을 때만)
     try { if (!document.fullscreenElement) document.documentElement.requestFullscreen({ navigationUI: "hide" }).catch(() => {}); } catch {}
-    if (act === "fullscreen") return;
+    return;
   }
   if (act !== "end") H.endArmed = false;
   try {
