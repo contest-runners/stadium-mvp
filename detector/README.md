@@ -6,8 +6,7 @@
 ```
 pip install ultralytics requests opencv-python
 ```
-모델 파일 `ball_s.pt`는 용량 때문에 git에 없습니다. 아래 링크에서 받아 `detector/weights/ball_s.pt`에 넣으세요.
-- 다운로드: DRIVE_LINK
+모델 파일 `ball_s.pt`->detector/weights/ball_s.pt
 - 모델: YOLO11s를 Roboflow `futsal-scoring-model` + 자체 촬영 영상으로 파인튜닝 (클래스: ball)
 
 ## 실행
